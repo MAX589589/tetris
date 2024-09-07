@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris</title>
+    <style>
+        @media (max-width: 800px){
+            .speed-button{
+                display: none;
+            }
+
+            .display-none{
+                display: none;
+            }
+            #pause-button{
+                display: none;
+            }
+            #restart-button{
+                display: none;
+            }
+            #mobile-controls {
+                display: flex !important; /* Mostrar en pantallas pequeñas */
+                justify-content: center;
+            }
+        }
+        * {
+            color: black;
+            font-size: 20px;
+            font-family:fantasy;
+        }
+        body {
+            background-color: #3a3a3a;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #mobile-controls {
+            display: none;
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 200px; /* Ajustar ancho máximo según necesidad */
+        }
+
+        #game-container {
+            position: relative;
+            width: 200px;
+            height: 400px;
+            border-radius: 10px;
+            border: 10px solid rgb(100, 100, 100);
+            overflow: hidden;
+        }
+        #mobile-controls button {
+            width: 40px;
+            height: 40px;
+            margin: 5px;
+            border-radius: 5px;
+            font-size: 20px;
+        }
+        .fila {
+            display: flex;
+        }
+        .celda {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #cccccc3d;
+            box-sizing: border-box;
+        }
+        button { /* Estilo para todos los botones */
+            background-color: rgb(100, 100, 100);
+            border: 3px solid rgb(100, 100, 100);
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        .speed-button {
+            font-family: fantasy;
+            font-weight: 600;
+            padding: 0;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background-color: rgb(100, 100, 100);
+            color:black;
+            font-size: 30px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        .display-none{
+            display: none;
+        }
+        #score {
+            color: black;   
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        header {
+            text-align: center;
+            color: black;
+        }
+    </style>
+    <script>
+    
+function getRandomColor(paletteIndex) {
+  const palettes = [
+    ["#A4D8E1", "#F6B5C0", "#F3E5AB", "#B2E0D7", "#D1C4E9"], // Paleta 1: Pastel Suave
+    ["#4E3B31", "#5B6F4D", "#C5684E", "#E8CBA0", "#AFAFAF"], // Paleta 2: Tierra
+    ["#39FF14", "#00BFFF", "#FF3F8E", "#FFFF00", "#FF5E00"], // Paleta 3: Neón
+    ["#1F3A3D", "#009B9F", "#B7C9C7", "#A4D7E1", "#BDA0D9"], // Paleta 4: Frío
+    ["#C0392B", "#2980B9", "#27AE60", "#F1C40F", "#34495E"] // Paleta 5: Clásica
+  ];
+
+  // Si no se proporciona un índice de paleta válido, usar la paleta 0 (Pastel Suave) por defecto
+  const selectedPaletteIndex = paletteIndex >= 0 && paletteIndex < palettes.length ? paletteIndex : 0; 
+  const palette = palettes[selectedPaletteIndex];
+  return palette[Math.floor(Math.random() * palette.length)];
+}
+
+
+        class Piece {
+            constructor(shape, x, y, color) {
+                this.shape = shape; // Forma de la pieza (matriz de 1s y 0s)
+                this.x = x; // Posición x en la grilla
+                this.y = y; // Posición y en la grilla
+                this.color = color; // Color de la pieza
+            }
+
+            rotate() {
+                // Rotar la matriz 90 grados
+                this.shape = this.shape[0].map((_, colIndex) => this.shape.map(row => row[colIndex]).reverse());
+            }
+
+            move(x, y) {
+                this.x = x;
+                this.y = y;
+            }
+        }
+
+        class Game {
+            constructor(width, height) {
+                this.width = width; // Ancho de la grilla
+                this.height = height; // Alto de la grilla
+                this.grid = []; // Grilla del juego (matriz)
+                this.score = 0; // Puntuación actual
+                this.currentPiece = null; // Pieza que se está moviendo
+                this.dropInterval = 1000; // Intervalo de caída en milisegundos
+                this.lastDropTime = 0; // Tiempo de la última caída
+                this.isPaused = false; // Indica si el juego está pausado
+                this.init(); // Inicializar el juego
+                this.generatePiece(); // Generar la primera pieza
+            }
+
+            init() {
+                // Crear la grilla vacía
+                this.grid = [];
+                for (let i = 0; i < this.height; i++) {
+                    this.grid.push(new Array(this.width).fill(null));
+                }
+
+                // Reiniciar la puntuación y el intervalo de caída
+                this.score = 0;
+                this.dropInterval = 1000;
+                this.isPaused = false;
+
+                // Generar una nueva pieza
+                this.generatePiece();
+            }
+
+            generatePiece() {
+    const shapes = [
+        [[1, 1], [1, 1]], // Cuadrado
+        [[1, 1, 1], [0, 1, 0]], // T
+        [[1, 1], [1, 0], [1, 0]], // L
+        [[1, 1, 1, 1]], // I
+        [[1, 1, 1], [1, 0, 0]], // J
+        [[1, 1, 1], [0, 0, 1]], // S
+        [[0, 1, 1], [1, 1, 0]]  // Z
+    ];
+
+    const randomIndex = Math.floor(Math.random() * shapes.length);
+    const shape = shapes[randomIndex];
+    const x = Math.floor(Math.random() * (this.width - shape[0].length));
+    const y = 0;
+
+    // Set the color to black
+    const color = '#000000'; 
+
+    this.currentPiece = new Piece(shape, x, y, color);
+}
+
+
+            update(currentTime) {
+                // Mover la pieza hacia abajo cada 'dropInterval' milisegundos
+                if (!this.isPaused && currentTime - this.lastDropTime >= this.dropInterval) {
+                    this.lastDropTime = currentTime;
+                    this.moveDown();
+                }
+            }
+
+            moveDown() {
+                // Verificar si la pieza puede moverse hacia abajo
+                if (this.currentPiece.y < this.height - this.currentPiece.shape.length) {
+                    if (this.isValidPosition(this.currentPiece.x, this.currentPiece.y + 1)) {
+                        this.currentPiece.move(this.currentPiece.x, this.currentPiece.y + 1);
+                    } else {
+                        // Si no puede moverse, colocarla en la grilla
+                        this.placePiece();
+                    }
+                } else {
+                    // Si ha llegado al final, colocarla en la grilla
+                    this.placePiece();
+                }
+            }
+
+            isValidPosition(x, y) {
+                // Verificar si la pieza está dentro de los límites de la grilla
+                // y si no colisiona con otras piezas
+                for (let i = 0; i < this.currentPiece.shape.length; i++) {
+                    for (let j = 0; j < this.currentPiece.shape[i].length; j++) {
+                        if (this.currentPiece.shape[i][j] === 1) {
+                            let newX = x + j;
+                            let newY = y + i;
+                            if (newX < 0 || newX >= this.width || newY >= this.height || (newY >= 0 && this.grid[newY][newX] !== null)) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+                return true;
+            }
+
+            placePiece() {
+                // Colocar la pieza en la grilla
+                for (let i = 0; i < this.currentPiece.shape.length; i++) {
+                    for (let j = 0; j < this.currentPiece.shape[i].length; j++) {
+                        if (this.currentPiece.shape[i][j] === 1) {
+                            this.grid[this.currentPiece.y + i][this.currentPiece.x + j] = this.currentPiece;
+                        }
+                    }
+                }
+
+                // Verificar si se completaron líneas
+                this.clearLines();
+
+                // Generar una nueva pieza
+                this.generatePiece();
+            }
+
+            clearLines() {
+                // Verificar si hay líneas completas y eliminarlas
+                for (let i = 0; i < this.height; i++) {
+                    let lineaCompleta = true;
+                    for (let j = 0; j < this.width; j++) {
+                        if (this.grid[i][j] === null) {
+                            lineaCompleta = false;
+                            break;
+                        }
+                    }
+                    if (lineaCompleta) {
+                        this.grid.splice(i, 1); // Eliminar la línea
+                        this.grid.unshift(new Array(this.width).fill(null)); // Agregar una nueva línea vacía al principio
+                        this.score += 100; // Aumentar la puntuación
+                        this.dropInterval = Math.max(100, this.dropInterval - 50); // Aumentar la velocidad
+                    }
+                }
+                this.updateScoreDisplay(); // Actualizar la puntuación en la pantalla
+            }
+
+            updateScoreDisplay() {
+                document.getElementById('score').textContent = 'Puntuación: ' + this.score;
+            }
+
+            render() {
+                // Dibujar la grilla y la pieza actual en la pantalla
+                let gameContainer = document.getElementById('game-container');
+                let html = '';
+                for (let i = 0; i < this.height; i++) {
+                    html += '<div class="fila">';
+                    for (let j = 0; j < this.width; j++) {
+                        if (this.grid[i][j] !== null) {
+                            html += '<div class="celda" style="background-color: ' + this.grid[i][j].color + '"></div>';
+                        } else {
+                            html += '<div class="celda"></div>';
+                        }
+                    }
+                    html += '</div>';
+                }
+
+                // Dibujar la pieza actual
+                if (this.currentPiece !== null) {
+                    for (let i = 0; i < this.currentPiece.shape.length; i++) {
+                        for (let j = 0; j < this.currentPiece.shape[i].length; j++) {
+                            if (this.currentPiece.shape[i][j] === 1) {
+                                html += '<div class="celda" style="background-color: ' + this.currentPiece.color + '; position: absolute; top: ' + ((this.currentPiece.y + i) * 20) + 'px; left: ' + ((this.currentPiece.x + j) * 20) + 'px;"></div>';
+                            }
+                        }
+                    }
+                }
+
+                gameContainer.innerHTML = html;
+            }
+
+            togglePause() {
+                this.isPaused = !this.isPaused;
+            }
+
+            increaseSpeed() {
+                this.dropInterval = Math.max(100, this.dropInterval - 100);
+            }
+
+            decreaseSpeed() {
+                this.dropInterval += 100;
+            }
+
+            restart() {
+                this.init();
+                this.updateScoreDisplay();
+            }
+
+            dropInstantaneously() {
+                while (this.isValidPosition(this.currentPiece.x, this.currentPiece.y + 1)) {
+                    this.currentPiece.move(this.currentPiece.x, this.currentPiece.y + 1);
+                }
+                this.placePiece();
+            }
+        }
+
+        // Crear una nueva instancia del juego
+        const game = new Game(10, 20);
+
+        // Manejar eventos del teclado
+        document.addEventListener('keydown', (e) => {
+            if (!game.isPaused) {
+                if (e.key === 'ArrowLeft') {
+                    if (game.isValidPosition(game.currentPiece.x - 1, game.currentPiece.y)) {
+                        game.currentPiece.move(game.currentPiece.x - 1, game.currentPiece.y);
+                    }
+                } else if (e.key === 'ArrowRight') {
+                    if (game.isValidPosition(game.currentPiece.x + 1, game.currentPiece.y)) {
+                        game.currentPiece.move(game.currentPiece.x + 1, game.currentPiece.y);
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    const originalShape = game.currentPiece.shape;
+                    game.currentPiece.rotate();
+                    if (!game.isValidPosition(game.currentPiece.x, game.currentPiece.y)) {
+                        game.currentPiece.shape = originalShape;
+                    }
+                } else if (e.key === 'ArrowDown') {
+                    game.dropInstantaneously();
+                } else if (e.key === 'q') {
+                    game.decreaseSpeed();
+                } else if (e.key === 'e') {
+                    game.increaseSpeed();
+                }
+            }
+        });
+
+        // Manejar eventos de los botones
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('pause-button').addEventListener('click', () => {
+                game.togglePause();
+                const button = document.getElementById('pause-button');
+                button.textContent = game.isPaused ? 'Reanudar' : 'Pausar';
+            });
+            document.getElementById('increase-speed').addEventListener('click', () => {
+                game.increaseSpeed();
+            });
+            document.getElementById('decrease-speed').addEventListener('click', () => {
+                game.decreaseSpeed();
+            });
+            document.getElementById('restart-button').addEventListener('click', () => {
+                game.restart();
+                const button = document.getElementById('pause-button');
+                button.textContent = 'Pausar';
+            });
+            document.getElementById('mobile-left').addEventListener('click', () => {
+                document.dispatchEvent(new KeyboardEvent('keydown', {'key': 'ArrowLeft'}));
+            });
+            document.getElementById('mobile-right').addEventListener('click', () => {
+                document.dispatchEvent(new KeyboardEvent('keydown', {'key': 'ArrowRight'}));
+            });
+            document.getElementById('mobile-up').addEventListener('click', () => {
+                document.dispatchEvent(new KeyboardEvent('keydown', {'key': 'ArrowUp'}));
+            });
+        
+        });
+
+        // Bucle principal del juego (60 FPS)
+        setInterval(() => {
+            const currentTime = Date.now();
+            game.update(currentTime);
+            game.render();
+        }, 1000 / 60);
+    </script>
+</head>
+<body>
+    <header>
+        <h1 id="Tetris">Tetris</h1>
+        <div class="display-none">
+            <label for="color-palette" class="display-none">Paleta de colores:</label>
+            <select id="color-palette">
+                <option value="0">Pastel Suave</option>
+                <option value="1">Tierra</option>
+                <option value="2">Neón</option>
+                <option value="3">Frío</option>
+                <option value="4">Clásica</option>
+            </select>
+        </div>
+        <div id="score">Puntuación: 0</div>
+    </header>
+    <div id="game-container"></div>
+    <button id="pause-button">Pausar</button>
+    <button id="restart-button">Reiniciar</button>
+    <div id="speed-buttons">
+        <button id="increase-speed" class="speed-button">+</button>
+        <button id="decrease-speed" class="speed-button">-</button>
+    </div>
+    <div id="mobile-controls">
+        <button id="mobile-left">&#8592;</button>
+        <button id="mobile-up">&#8593;</button>
+        <button id="mobile-right">&#8594;</button>
+    </div>
+</body>
+</html>
